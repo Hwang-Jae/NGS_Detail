@@ -1,0 +1,1192 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NVH NGS 프로젝트 전략</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Chosen Palette: Calm Harmony (bg-gray-50, bg-white, text-gray-800, text-blue-600) -->
+    <!-- Application Structure Plan: 탭 기반 SPA 구조를 선택했습니다. (1)대시보드, (2)현황 분석, (3)핵심 문제점, (4)NGS 추진 전략, (5)NGS 기대 효과. 'NGS 기대 효과' 탭에 레이더 차트와 함께 정량적 개선율(퍼센테이지) 카드를 추가하여 성과를 직관적이고 정량적으로 비교하도록 구조를 개선했습니다. -->
+    <!-- Visualization & Content Choices: 
+        1. 시스템 현황 (보고서 표): '조직/비교' 목표 -> '대화형 HTML 그리드' (매트릭스) 채택. (HTML/Tailwind/JS)
+        2. 해외 시스템 비중 (표에서 파생): '비교/정보' 목표 -> '도넛 차트' 채택. (Chart.js Canvas)
+        3. 핵심 문제점 (보고서 P&S 표): '정보' 목표 -> '클릭형 카드 (아코디언)' 채택. (HTML/JS)
+        4. 전략 다이어그램 & 대시보드 이미지: '조직/정보' 목표 -> 'HTML/CSS 다이어그램' 채택. NGS의 목표를 함축적으로 표현. (HTML/Tailwind)
+        5. MES Private Cloud 상세 전략 & Hub/Spoke 인프라 상세 전략: '정보/설명' 목표 -> '모달 다이얼로그' 채택. (HTML/JS Modal)
+        6. 기대 효과 (성과 비교): '비교/정보' 목표 -> '레이더 차트' 및 '정량적 개선율 카드' 채택. (Chart.js Canvas / HTML/Tailwind)
+    -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body {
+            font-family: 'Inter', 'Noto Sans KR', sans-serif;
+            background-color: #f9fafb;
+        }
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 450px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 450px;
+            max-height: 500px;
+        }
+        .active-tab {
+            border-bottom-color: #2563eb;
+            color: #2563eb;
+            font-weight: 600;
+        }
+        .nav-link {
+            cursor: pointer;
+            transition: all 0.2s ease-in-out;
+        }
+        .problem-card {
+            cursor: pointer;
+            transition: all 0.2s ease-in-out;
+        }
+        .problem-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.04);
+        }
+        .matrix-table {
+            width: 100%;
+            overflow-x: auto;
+            border-collapse: collapse;
+        }
+        .matrix-table th, .matrix-table td {
+            border: 1px solid #e5e7eb;
+            padding: 0.5rem 0.75rem;
+            text-align: center;
+            font-size: 0.875rem;
+            min-width: 6rem;
+        }
+        .matrix-table th {
+            background-color: #f3f4f6;
+            position: sticky;
+            top: 0;
+        }
+        .matrix-table td:first-child {
+            font-weight: 600;
+            text-align: left;
+            position: sticky;
+            left: 0;
+            background-color: #f9fafb;
+            min-width: 8rem;
+        }
+        .matrix-dot {
+            display: inline-block;
+            width: 1rem;
+            height: 1rem;
+            border-radius: 9999px;
+            background-color: #2563eb;
+        }
+        .matrix-dot-local {
+            display: inline-block;
+            width: 1rem;
+            height: 1rem;
+            border-radius: 9999px;
+            background-color: #f59e0b;
+            position: relative;
+        }
+        .matrix-dot-local .tooltip {
+            visibility: hidden;
+            width: 120px;
+            background-color: #1f2937;
+            color: #fff;
+            text-align: center;
+            border-radius: 6px;
+            padding: 5px 0;
+            position: absolute;
+            z-index: 10;
+            bottom: 125%;
+            left: 50%;
+            margin-left: -60px;
+            opacity: 0;
+            transition: opacity 0.3s;
+            font-size: 0.75rem;
+        }
+        .matrix-dot-local:hover .tooltip {
+            visibility: visible;
+            opacity: 1;
+        }
+        .strategy-diagram {
+            border: 2px dashed #9ca3af;
+            padding: 1.5rem;
+            border-radius: 0.5rem;
+            text-align: center;
+            background-color: #ffffff;
+            height: 100%;
+        }
+        .strategy-box {
+            background-color: #eef2ff;
+            border: 1px solid #c7d2fe;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            margin-top: 0.5rem;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+        }
+        .strategy-arrow {
+            font-size: 2.5rem;
+            color: #6b7280;
+            margin: 0.5rem 0;
+            line-height: 1;
+        }
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 50;
+        }
+        .modal-content {
+            background-color: #fff;
+            padding: 2rem;
+            border-radius: 0.75rem;
+            max-width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+            position: relative;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        }
+        .dashboard-diagram {
+            display: flex;
+            align-items: center;
+            justify-content: space-around;
+            padding: 2rem 0;
+            gap: 1rem;
+        }
+        .dashed-box {
+            border: 2px dashed #f59e0b;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            background-color: #fffbeb;
+            flex: 1;
+            max-width: 45%;
+        }
+        .solid-box {
+            border: 2px solid #2563eb;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            background-color: #eff6ff;
+            flex: 1;
+            max-width: 45%;
+        }
+        .system-unit {
+            display: inline-block;
+            width: 0.75rem;
+            height: 0.75rem;
+            background-color: #f59e0b;
+            border-radius: 50%;
+            margin: 2px;
+        }
+        .system-unit-integrated {
+            display: inline-block;
+            width: 0.75rem;
+            height: 0.75rem;
+            background-color: #2563eb;
+            border-radius: 50%;
+            margin: 2px;
+        }
+        .arrow-icon {
+            font-size: 2rem;
+            color: #10b981;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+
+    <header class="bg-white shadow-sm">
+        <nav class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center">
+                    <span class="text-2xl font-bold text-blue-600">NVH NGS 프로젝트</span>
+                </div>
+                <div class="flex space-x-8">
+                    <a class="nav-link text-gray-500 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 border-transparent text-sm font-medium active-tab" data-tab="dashboard">대시보드</a>
+                    <a class="nav-link text-gray-500 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 border-transparent text-sm font-medium" data-tab="analysis">현황 분석</a>
+                    <a class="nav-link text-gray-500 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 border-transparent text-sm font-medium" data-tab="problems">핵심 문제점</a>
+                    <a class="nav-link text-gray-500 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 border-transparent text-sm font-medium" data-tab="strategy">NGS 추진 전략</a>
+                    <a class="nav-link text-gray-500 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 border-transparent text-sm font-medium" data-tab="benefits">NGS 기대 효과</a>
+                </div>
+            </div>
+        </nav>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        
+        <section id="dashboard" class="space-y-8">
+            <div class="bg-white shadow-lg rounded-lg overflow-hidden p-8">
+                <h1 class="text-3xl font-bold text-gray-800 mb-4">차세대 시스템 (NGS) 도입의 필요성</h1>
+                <p class="text-lg text-gray-600 mb-6">
+                    NVH의 지속 가능한 운영과 글로벌 경쟁력 확보를 위해 전사 데이터 통합 및 신뢰성 확보가 시급합니다.
+                    국내외 관계사의 시스템이 노후화되고 파편화되어 있어, 표준화된 프로세스를 수행하고 데이터를 통합 관리할 수 있는 차세대 시스템(NGS) 도입이 필수적입니다.
+                </p>
+                
+                <!-- Dashboard Diagram: Fragmentation vs Integration -->
+                <div class="dashboard-diagram flex flex-col md:flex-row mb-8">
+                    <div class="dashed-box">
+                        <h3 class="text-xl font-bold text-yellow-700 mb-3">AS-IS: 파편화와 비효율</h3>
+                        <p class="text-sm text-gray-600 mb-4">관계사/지역별 시스템 중복 및 분산 (Local ERP, Tally, 1C 등)</p>
+                        <div class="flex flex-wrap justify-center">
+                            <span class="system-unit"></span>
+                            <span class="system-unit"></span>
+                            <span class="system-unit"></span>
+                            <span class="system-unit"></span>
+                            <span class="system-unit"></span>
+                            <span class="system-unit"></span>
+                            <span class="system-unit"></span>
+                            <span class="system-unit"></span>
+                            <span class="system-unit"></span>
+                            <span class="system-unit"></span>
+                        </div>
+                        <p class="mt-4 text-xs font-semibold text-center text-gray-500">데이터 신뢰도 저하, 높은 유지보수 비용</p>
+                    </div>
+
+                    <div class="flex items-center justify-center p-4">
+                        <span class="arrow-icon">➔</span>
+                    </div>
+
+                    <div class="solid-box">
+                        <h3 class="text-xl font-bold text-blue-700 mb-3">TO-BE: NGS를 통한 통합</h3>
+                        <p class="text-sm text-gray-600 mb-4">Private Cloud 기반 Hub & Spoke 모델로 중앙 집중화</p>
+                        <div class="flex flex-col items-center justify-center h-full">
+                            <div class="p-3 bg-blue-600 rounded-full mb-2">
+                                <span class="text-white font-bold text-sm">NGS HUB</span>
+                            </div>
+                            <div class="flex justify-center flex-wrap w-full">
+                                <span class="system-unit-integrated"></span>
+                                <span class="system-unit-integrated"></span>
+                                <span class="system-unit-integrated"></span>
+                                <span class="system-unit-integrated"></span>
+                            </div>
+                        </div>
+                        <p class="mt-4 text-xs font-semibold text-center text-gray-500">운영 효율 극대화, 글로벌 거버넌스 확보</p>
+                    </div>
+                </div>
+                <!-- End Dashboard Diagram -->
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div class="bg-gray-100 p-6 rounded-lg">
+                        <h3 class="text-xl font-semibold text-gray-700 mb-2">데이터 통합</h3>
+                        <p class="text-gray-600">전 관계사의 데이터를 수집하고 표준화하여 신뢰도 높은 데이터 기반 의사결정을 지원합니다.</p>
+                    </div>
+                    <div class="bg-gray-100 p-6 rounded-lg">
+                        <h3 class="text-xl font-semibold text-gray-700 mb-2">경쟁력 확보</h3>
+                        <p class="text-gray-600">표준화된 업무 프로세스와 통합 시스템을 통해 운영 효율성을 극대화하고 시장 변화에 민첩하게 대응합니다.</p>
+                    </div>
+                    <div class="bg-gray-100 p-6 rounded-lg">
+                        <h3 class="text-xl font-semibold text-gray-700 mb-2">지속 가능성</h3>
+                        <p class="text-gray-600">체계적인 유지보수 및 보안 관리가 가능한 통합 클라우드 아키텍처를 구축하여 비용을 절감하고 안정적인 운영을 보장합니다.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+        
+        <section id="analysis" class="hidden space-y-8">
+            <div class="bg-white shadow-lg rounded-lg overflow-hidden p-8">
+                <h2 class="text-2xl font-bold text-gray-800 mb-4">전사 프로그램 사용 현황</h2>
+                <p class="text-gray-600 mb-6">
+                    현재 국내외 관계사 간 시스템 사용 현황이 매우 파편화되어 있습니다. 특히 해외 관계사의 경우, 표준 시스템(Nais, 그룹웨어 등) 외에 1C, Tally, PBS 등 다양한 자체 프로그램을 사용하고 있어 데이터 통합에 큰 어려움이 있습니다.
+                    아래 필터를 사용하여 지역별 시스템 현황을 확인해 보세요.
+                </p>
+                
+                <div class="mb-4">
+                    <label for="regionFilter" class="block text-sm font-medium text-gray-700">지역별 필터:</label>
+                    <select id="regionFilter" class="mt-1 block w-full md:w-1/3 pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md">
+                        <option value="all">전체</option>
+                        <option value="국내">국내</option>
+                        <option value="해외">해외</option>
+                    </select>
+                </div>
+
+                <div class="overflow-x-auto rounded-lg border border-gray-200">
+                    <table class="matrix-table" id="systemMatrix">
+                        <thead>
+                            <tr>
+                                <th class="sticky left-0 bg-gray-100">관계사</th>
+                                <th>SAP</th>
+                                <th>MES</th>
+                                <th>Nems</th>
+                                <th>SCportal</th>
+                                <th>QMS</th>
+                                <th>재무솔루션</th>
+                                <th>BIS</th>
+                                <th>Nais</th>
+                                <th>그룹웨어</th>
+                                <th>자체 시스템</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr data-region="국내">
+                                <td>NVHK</td>
+                                <td><span class="matrix-dot"></span></td>
+                                <td><span class="matrix-dot"></span></td>
+                                <td><span class="matrix-dot"></span></td>
+                                <td><span class="matrix-dot"></span></td>
+                                <td><span class="matrix-dot"></span></td>
+                                <td><span class="matrix-dot"></span></td>
+                                <td><span class="matrix-dot"></span></td>
+                                <td></td>
+                                <td><span class="matrix-dot"></span></td>
+                                <td></td>
+                            </tr>
+                            <tr data-region="국내">
+                                <td>NOS</td>
+                                <td><span class="matrix-dot"></span></td>
+                                <td><span class="matrix-dot"></span></td>
+                                <td></td>
+                                <td><span class="matrix-dot"></span></td>
+                                <td><span class="matrix-dot"></span></td>
+                                <td><span class="matrix-dot"></span></td>
+                                <td><span class="matrix-dot"></span></td>
+                                <td><span class="matrix-dot"></span></td>
+                                <td><span class="matrix-dot"></span></td>
+                                <td></td>
+                            </tr>
+                            <tr data-region="국내">
+                                <td>NFS 경주</td>
+                                <td><span class="matrix-dot"></span></td>
+                                <td></td>
+                                <td><span class="matrix-dot"></span></td>
+                                <td><span class="matrix-dot"></span></td>
+                                <td><span class="matrix-dot"></span></td>
+                                <td><span class="matrix-dot"></span></td>
+                                <td><span class="matrix-dot"></span></td>
+                                <td><span class="matrix-dot"></span></td>
+                                <td><span class="matrix-dot"></span></td>
+                                <td></td>
+                            </tr>
+                            <tr data-region="국내">
+                                <td>NFS 구미</td>
+                                <td><span class="matrix-dot"></span></td>
+                                <td></td>
+                                <td><span class="matrix-dot"></span></td>
+                                <td><span class="matrix-dot"></span></td>
+                                <td><span class="matrix-dot"></span></td>
+                                <td><span class="matrix-dot"></span></td>
+                                <td><span class="matrix-dot"></span></td>
+                                <td><span class="matrix-dot"></span></td>
+                                <td><span class="matrix-dot"></span></td>
+                                <td></td>
+                            </tr>
+                            <tr data-region="국내">
+                                <td>GH 구미</td>
+                                <td><span class="matrix-dot"></span></td>
+                                <td></td>
+                                <td><span class="matrix-dot"></span></td>
+                                <td><span class="matrix-dot"></span></td>
+                                <td><span class="matrix-dot"></span></td>
+                                <td><span class="matrix-dot"></span></td>
+                                <td><span class="matrix-dot"></span></td>
+                                <td><span class="matrix-dot"></span></td>
+                                <td><span class="matrix-dot"></span></td>
+                                <td></td>
+                            </tr>
+                            <tr data-region="국내">
+                                <td>GH 포천</td>
+                                <td><span class="matrix-dot"></span></td>
+                                <td></td>
+                                <td><span class="matrix-dot"></span></td>
+                                <td><span class="matrix-dot"></span></td>
+                                <td><span class="matrix-dot"></span></td>
+                                <td><span class="matrix-dot"></span></td>
+                                <td></td>
+                                <td><span class="matrix-dot"></span></td>
+                                <td></td>
+                                <td></td>
+                            </tr>
+                            <tr data-region="국내">
+                                <td>NBTS</td>
+                                <td><span class="matrix-dot"></span></td>
+                                <td><span class="matrix-dot"></span></td>
+                                <td><span class="matrix-dot"></span></td>
+                                <td><span class="matrix-dot"></span></td>
+                                <td></td>
+                                <td><span class="matrix-dot"></span></td>
+                                <td></td>
+                                <td></td>
+                                <td><span class="matrix-dot"></span></td>
+                                <td></td>
+                            </tr>
+                            <tr data-region="국내">
+                                <td>NTM</td>
+                                <td><span class="matrix-dot"></span></td>
+                                <td></td>
+                                <td></td>
+                                <td><span class="matrix-dot"></span></td>
+                                <td><span class="matrix-dot"></span></td>
+                                <td><span class="matrix-dot"></span></td>
+                                <td><span class="matrix-dot"></span></td>
+                                <td><span class="matrix-dot"></span></td>
+                                <td><span class="matrix-dot"></span></td>
+                                <td></td>
+                            </tr>
+                            <tr data-region="국내">
+                                <td>NVH양주</td>
+                                <td></td>
+                                <td></td>
+                                <td></td>
+                                <td></td>
+                                <td></td>
+                                <td></td>
+                                <td><span class="matrix-dot"></span></td>
+                                <td></td>
+                                <td><span class="matrix-dot"></span></td>
+                                <td></td>
+                            </tr>
+                            <tr data-region="해외">
+                                <td>NVH강소</td>
+                                <td></td>
+                                <td></td>
+                                <td></td>
+                                <td></td>
+                                <td></td>
+                                <td></td>
+                                <td></td>
+                                <td><span class="matrix-dot"></span></td>
+                                <td><span class="matrix-dot"></span></td>
+                                <td><span class="matrix-dot-local"><span class="tooltip">현지 ERP 등</span></span></td>
+                            </tr>
+                            <tr data-region="해외">
+                                <td>NVHINDIA</td>
+                                <td></td>
+                                <td></td>
+                                <td></td>
+                                <td></td>
+                                <td></td>
+                                <td></td>
+                                <td></td>
+                                <td><span class="matrix-dot"></span></td>
+                                <td><span class="matrix-dot"></span></td>
+                                <td><span class="matrix-dot-local"><span class="tooltip">Tally 등</span></span></td>
+                            </tr>
+                            <tr data-region="해외">
+                                <td>NVHIA</td>
+                                <td></td>
+                                <td></td>
+                                <td></td>
+                                <td></td>
+                                <td></td>
+                                <td></td>
+                                <td></td>
+                                <td><span class="matrix-dot"></span></td>
+                                <td><span class="matrix-dot"></span></td>
+                                <td><span class="matrix-dot-local"><span class="tooltip">현지 ERP 등</span></span></td>
+                            </tr>
+                            <tr data-region="해외">
+                                <td>NVHRUS</td>
+                                <td></td>
+                                <td></td>
+                                <td></td>
+                                <td></td>
+                                <td></td>
+                                <td></td>
+                                <td></td>
+                                <td><span class="matrix-dot"></span></td>
+                                <td></td>
+                                <td><span class="matrix-dot-local"><span class="tooltip">1C 등</span></span></td>
+                            </tr>
+                            <tr data-region="해외">
+                                <td>NVH Czech</td>
+                                <td></td>
+                                <td></td>
+                                <td></td>
+                                <td></td>
+                                <td></td>
+                                <td></td>
+                                <td></td>
+                                <td><span class="matrix-dot"></span></td>
+                                <td></td>
+                                <td><span class="matrix-dot-local"><span class="tooltip">PBS 등</span></span></td>
+                            </tr>
+                            <tr data-region="해외">
+                                <td>NVH Poland</td>
+                                <td></td>
+                                <td></td>
+                                <td></td>
+                                <td></td>
+                                <td></td>
+                                <td></td>
+                                <td></td>
+                                <td><span class="matrix-dot"></span></td>
+                                <td></td>
+                                <td><span class="matrix-dot-local"><span class="tooltip">현지 ERP 등</span></span></td>
+                            </tr>
+                            <tr data-region="해외">
+                                <td>NVH Germeny</td>
+                                <td></td>
+                                <td></td>
+                                <td></td>
+                                <td></td>
+                                <td></td>
+                                <td></td>
+                                <td></td>
+                                <td><span class="matrix-dot"></span></td>
+                                <td></td>
+                                <td><span class="matrix-dot-local"><span class="tooltip">현지 ERP 등</span></span></td>
+                            </tr>
+                            <tr data-region="해외">
+                                <td>AFS</td>
+                                <td></td>
+                                <td></td>
+                                <td></td>
+                                <td></td>
+                                <td></td>
+                                <td></td>
+                                <td></td>
+                                <td><span class="matrix-dot"></span></td>
+                                <td></td>
+                                <td><span class="matrix-dot-local"><span class="tooltip">현지 ERP 등</span></span></td>
+                            </tr>
+                            <tr data-region="해외">
+                                <td>NVH USA</td>
+                                <td><span class="matrix-dot"></span></td>
+                                <td><span class="matrix-dot"></span></td>
+                                <td></td>
+                                <td></td>
+                                <td></td>
+                                <td></td>
+                                <td></td>
+                                <td><span class="matrix-dot"></span></td>
+                                <td></td>
+                                <td><span class="matrix-dot-local"><span class="tooltip">Smart MRO 등</span></span></td>
+                            </tr>
+                            <tr data-region="해외">
+                                <td>GHI</td>
+                                <td></td>
+                                <td></td>
+                                <td></td>
+                                <td></td>
+                                <td></td>
+                                <td></td>
+                                <td><span class="matrix-dot"></span></td>
+                                <td><span class="matrix-dot"></span></td>
+                                <td></td>
+                                <td><span class="matrix-dot-local"><span class="tooltip">현지 ERP 등</span></span></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="bg-white shadow-lg rounded-lg overflow-hidden p-8">
+                <h2 class="text-2xl font-bold text-gray-800 mb-4">해외 관계사 시스템 구성 (인스턴스 기준)</h2>
+                <p class="text-gray-600 mb-6">
+                    해외 관계사에서 사용 중인 시스템 인스턴스를 분석한 결과, Nais 외에는 표준 시스템(SAP, MES 등)의 사용률이 매우 낮으며, 각 법인의 필요에 따른 자체 시스템(Local ERP)의 비중이 매우 높은 것을 확인할 수 있습니다.
+                </p>
+                <div class="chart-container">
+                    <canvas id="overseasSystemsChart"></canvas>
+                </div>
+            </div>
+        </section>
+
+        <section id="problems" class="hidden space-y-8">
+            <div class="bg-white shadow-lg rounded-lg overflow-hidden p-8">
+                <h2 class="text-2xl font-bold text-gray-800 mb-4">통합 시스템 부재로 인한 핵심 문제점</h2>
+                <p class="text-gray-600 mb-6">
+                    시스템의 파편화는 단순히 비효율을 넘어 보안, 운영, 유지보수, 데이터 신뢰도 등 다방면에 걸쳐 심각한 문제점을 야기하고 있습니다.
+                    각 문제점을 클릭하여 상세 내용과 해결 방안을 확인해 보세요.
+                </p>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="problem-card bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
+                        <h3 class="text-xl font-semibold text-blue-600">1. 보안 (Security)</h3>
+                        <div class="problem-detail hidden mt-4 text-gray-600 space-y-2">
+                            <p><b>[문제]</b> TISAX, ESG 운영, 보안 감사 등 국내외 보안 감사 발생 시, 시스템이 통합되지 않아 문제점 파악 및 대응 지원이 어려움.</p>
+                            <p><b>[해결]</b> NGS 프로젝트를 통해 보안 표준을 구축하고, 이를 전 관계사에 전파하여 일관된 보안 체계를 확립해야 함.</p>
+                        </div>
+                    </div>
+                    <div class="problem-card bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
+                        <h3 class="text-xl font-semibold text-blue-600">2. 운영 (Operation)</h3>
+                        <div class="problem-detail hidden mt-4 text-gray-600 space-y-2">
+                            <p><b>[문제]</b> 각기 다른 시스템 구조와 프로세스로 인해 본사에서의 현황 파악 및 지원이 어려움. 담당자 퇴사 시 업무 공백 리스크가 매우 큼.</p>
+                            <p><b>[해결]</b> 시스템 표준 설계와 표준화된 운영 절차를 마련하여 누구나 쉽게 시스템을 이해하고 운영할 수 있도록 해야 함.</p>
+                        </div>
+                    </div>
+                    <div class="problem-card bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
+                        <h3 class="text-xl font-semibold text-blue-600">3. 유지보수 (Maintenance)</h3>
+                        <div class="problem-detail hidden mt-4 text-gray-600 space-y-2">
+                            <p><b>[문제]</b> 운영상의 문제점과 더불어, 해외 관계사의 경우 시차와 거리상의 이유로 신속한 유지보수 대응에 한계가 있음.</p>
+                            <p><b>[해결]</b> 유지보수 및 운영 범위를 명확히 정의하고, 본사 통합 관리를 위한 효율적인 방안(예: 클라우드 기반 원격 관리)이 필요함.</p>
+                        </div>
+                    </div>
+                    <div class="problem-card bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
+                        <h3 class="text-xl font-semibold text-blue-600">4. 통일성 부족 (Lack of Uniformity)</h3>
+                        <div class="problem-detail hidden mt-4 text-gray-600 space-y-2">
+                            <p><b>[문제]</b> 관계사마다 다른 시스템을 사용하여 시스템 간 연계성이 떨어지고, 이로 인해 취합된 데이터의 신뢰도가 심각하게 저하됨.</p>
+                            <p><b>[해결]</b> 표준 업무, 표준 프로세스, 통합 프로그램을 설계하는 NGS 프로젝트가 근본적인 해결책임.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="strategy" class="hidden space-y-8">
+            <div class="bg-white shadow-lg rounded-lg overflow-hidden p-8">
+                <h2 class="text-2xl font-bold text-gray-800 mb-4">NGS 추진 핵심 전략</h2>
+                <p class="text-gray-600 mb-6">
+                    NGS 성공을 위한 세 가지 핵심 전략입니다. 특히, 클라우드와 거점 전략은 글로벌 IT 인프라 구축의 근간이 됩니다.
+                </p>
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    
+                    <div class="flex flex-col">
+                        <h3 class="text-xl font-semibold text-gray-700 mb-3 text-center">1. 클라우드 시스템 도입</h3>
+                        <div class="strategy-diagram flex flex-col justify-between">
+                            <div>
+                                <h4 class="font-bold text-lg text-blue-600">Cloud-First 전략</h4>
+                                <p class="text-sm text-gray-500 mb-4">유연성, 확장성, 유지보수 효율성 확보</p>
+                            </div>
+                            <div class="strategy-box bg-blue-50 border-blue-200">
+                                <span class="font-bold">SaaS</span>
+                                <p class="text-sm text-gray-600">그룹웨어, 재무 솔루션 등</p>
+                            </div>
+                            <div class="strategy-box bg-purple-50 border-purple-200">
+                                <span class="font-bold">PaaS / IaaS</span>
+                                <p class="text-sm text-gray-600">SAP, MES 등 핵심 기간계 시스템</p>
+                            </div>
+                            <div class="strategy-box bg-green-50 border-green-200">
+                                <span class="font-bold">Private Cloud</span>
+                                <p class="text-sm text-gray-600">보안 등 특수 목적 시스템 (최소화)</p>
+                            </div>
+                            <button id="openMesModal" class="mt-4 w-full bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg transition duration-150">
+                                MES Private Cloud 도입 상세 전략
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="flex flex-col">
+                        <h3 class="text-xl font-semibold text-gray-700 mb-3 text-center">2. Hub & Spoke 거점 전략</h3>
+                        <div class="strategy-diagram flex flex-col justify-center">
+                            <div class="strategy-box bg-gray-100 border-gray-300">
+                                <span class="font-bold text-lg">NVH 본사 (Hub)</span>
+                                <p class="text-sm text-gray-600">표준 프로세스/데이터/보안 정책 관리<br/>핵심 시스템(SAP, MES) 운영 및 통합 관리</p>
+                            </div>
+                            <div class="strategy-arrow">↓ ↑</div>
+                            <div class="flex justify-around items-center space-x-2">
+                                <div class="strategy-box text-sm flex-1">
+                                    <span class="font-bold">국내 거점<br/>(Spoke)</span>
+                                </div>
+                                <div class="strategy-box text-sm flex-1">
+                                    <span class="font-bold">미주 거점<br/>(Spoke)</span>
+                                </div>
+                                <div class="strategy-box text-sm flex-1">
+                                    <span class="font-bold">유럽 거점<br/>(Spoke)</span>
+                                </div>
+                                <div class="strategy-box text-sm flex-1">
+                                    <span class="font-bold">아시아 거점<br/>(Spoke)</span>
+                                </div>
+                            </div>
+                            <p class="text-sm text-gray-600 mt-4">각 거점(Spoke)은 본사(Hub)의 표준 시스템을 사용하며, 현지 특화 기능만 최소한으로 적용합니다.</p>
+                            <button id="openHubSpokeModal" class="mt-4 w-full bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg transition duration-150">
+                                Hub/Spoke 인프라 구축 상세 전략
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="flex flex-col">
+                        <h3 class="text-xl font-semibold text-gray-700 mb-3 text-center">3. 업무/데이터 표준화</h3>
+                        <div class="strategy-diagram flex flex-col justify-start">
+                            <h4 class="font-bold text-lg text-blue-600">표준화 3대 원칙</h4>
+                            <p class="text-sm text-gray-500 mb-4">"Fit to Standard"</p>
+                            
+                            <div class="space-y-4 text-left">
+                                <div class="strategy-box">
+                                    <span class="font-bold text-blue-700">① 업무 프로세스 표준화</span>
+                                    <p class="text-sm text-gray-600">전사 공통 프로세스를 식별하고 단일 표준을 정의.</p>
+                                </div>
+                                <div class="strategy-box">
+                                    <span class="font-bold text-blue-700">② 데이터 표준화</span>
+                                    <p class="text-sm text-gray-600">기준 정보의 관리 주체와 표준 체계를 정의하여 데이터 일관성 확보.</p>
+                                </div>
+                                <div class="strategy-box">
+                                    <span class="font-bold text-blue-700">③ IT 인프라/보안 표준화</span>
+                                    <p class="text-sm text-gray-600">클라우드 운영, 시스템 접근 제어, DR 정책 표준화.</p>
+                                </div>
+                            </div>
+                            <div class="mt-8">
+                                <h4 class="font-bold text-xl text-green-700 mb-3 border-t pt-4">NGS 도입 기대 효과 (요약)</h4>
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div class="p-3 bg-green-50 rounded-lg border border-green-200">
+                                        <h5 class="font-semibold text-green-800">전략적 효과 (Global Governance)</h5>
+                                        <p class="text-xs text-gray-700 mt-1">글로벌 통합 관리 체계 확립 및 외부 감사 대응력 강화</p>
+                                    </div>
+                                    <div class="p-3 bg-green-50 rounded-lg border border-green-200">
+                                        <h5 class="font-semibold text-green-800">운영 효율 증대 (Operation Excellence)</h5>
+                                        <p class="text-xs text-gray-700 mt-1">유지보수 리소스 절감 및 신규 법인 시스템 적용 기간 단축</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </section>
+        
+        <section id="benefits" class="hidden space-y-8">
+            <div class="bg-white shadow-lg rounded-lg overflow-hidden p-8">
+                <h2 class="text-2xl font-bold text-gray-800 mb-4">NGS 도입 성과 비교 분석</h2>
+                <p class="text-gray-600 mb-6">
+                    NGS 프로젝트를 통한 Hub & Spoke 전략 및 클라우드 통합 시스템 도입 전후의 주요 성과 지표 개선 효과를 비교합니다. (레이더 차트의 점수는 5점 만점 기준)
+                </p>
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
+                    <div class="chart-container">
+                        <canvas id="benefitsRadarChart"></canvas>
+                    </div>
+                    <div class="space-y-6">
+                        <h3 class="text-xl font-semibold text-blue-600">주요 개선 지표 및 정량적 성과 목표</h3>
+                        <div class="grid grid-cols-2 gap-4">
+                            <!-- Data Integrity -->
+                            <div class="p-4 bg-blue-50 rounded-lg border border-blue-200 text-center">
+                                <p class="text-4xl font-extrabold text-blue-600 mb-1">
+                                    <span class="text-green-500">+85%</span>
+                                </p>
+                                <p class="font-semibold text-gray-700">데이터 신뢰도/통일성</p>
+                                <p class="text-xs text-gray-500 mt-1">Local 데이터 통합으로 신뢰도 향상</p>
+                            </div>
+                            <!-- Operational Efficiency -->
+                            <div class="p-4 bg-blue-50 rounded-lg border border-blue-200 text-center">
+                                <p class="text-4xl font-extrabold text-blue-600 mb-1">
+                                    <span class="text-green-500">+50%</span>
+                                </p>
+                                <p class="font-semibold text-gray-700">운영 효율성 (IT 리소스)</p>
+                                <p class="text-xs text-gray-500 mt-1">단일 시스템/프로세스 적용 및 리소스 절감</p>
+                            </div>
+                            <!-- Global Scalability -->
+                            <div class="p-4 bg-blue-50 rounded-lg border border-blue-200 text-center">
+                                <p class="text-4xl font-extrabold text-blue-600 mb-1">
+                                    <span class="text-green-500">-70%</span>
+                                </p>
+                                <p class="font-semibold text-gray-700">신규 법인 시스템 적용 기간</p>
+                                <p class="text-xs text-gray-500 mt-1">Hub & Spoke 모델로 신속한 시스템 배포 가능</p>
+                            </div>
+                            <!-- Security / Maintenance -->
+                            <div class="p-4 bg-blue-50 rounded-lg border border-blue-200 text-center">
+                                <p class="text-4xl font-extrabold text-blue-600 mb-1">
+                                    <span class="text-green-500">+90%</span>
+                                </p>
+                                <p class="font-semibold text-gray-700">보안/유지보수 용이성</p>
+                                <p class="text-xs text-gray-500 mt-1">클라우드 중앙 관리 및 표준 보안 체계 확립</p>
+                            </div>
+                        </div>
+                        <p class="text-sm text-gray-500 pt-2 text-center">*위 수치는 목표 달성도 및 개선 효과의 예상치입니다.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- MES 상세 전략 모달 -->
+    <div id="mesModal" class="modal-overlay hidden">
+        <div class="modal-content w-full lg:w-3/4">
+            <button id="closeMesModal" class="absolute top-4 right-4 text-gray-500 hover:text-gray-800 text-2xl font-bold p-2 leading-none">
+                &times;
+            </button>
+            <div id="mesModalContent">
+            </div>
+        </div>
+    </div>
+    
+    <!-- Hub & Spoke 상세 전략 모달 -->
+    <div id="hubSpokeModal" class="modal-overlay hidden">
+        <div class="modal-content w-full lg:w-3/4">
+            <button id="closeHubSpokeModal" class="absolute top-4 right-4 text-gray-500 hover:text-gray-800 text-2xl font-bold p-2 leading-none">
+                &times;
+            </button>
+            <div id="hubSpokeModalContent">
+            </div>
+        </div>
+    </div>
+
+    <footer class="bg-white mt-12 border-t border-gray-200">
+        <div class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8 text-center text-gray-500 text-sm">
+            &copy; 2025 NVH NGS Project Interactive Report.
+        </div>
+    </footer>
+
+    <script>
+        const mesStrategyContent = `
+            <h3 class="text-2xl font-bold text-gray-800 mb-6 border-b pb-2">MES Private Cloud 도입 상세 전략</h3>
+            <p class="text-gray-600 mb-6">
+                SAP Private Cloud 환경을 활용하여 MES를 구축하는 것은 NGS 프로젝트의 핵심 과제입니다. 통합된 인프라를 활용하여 운영 효율성, 보안 표준 및 데이터 통일성을 확보합니다.
+            </p>
+
+            <div class="mb-8">
+                <h4 class="text-xl font-semibold text-blue-600 mb-3">1. Private Cloud 기반 MES 구조 설계 (추천 아키텍처)</h4>
+                <div class="overflow-x-auto rounded-lg border border-gray-200">
+                    <table class="w-full text-sm text-left text-gray-500 table-auto">
+                        <thead class="text-xs text-gray-700 uppercase bg-gray-50">
+                            <tr>
+                                <th scope="col" class="px-6 py-3 min-w-[100px]">구성 요소</th>
+                                <th scope="col" class="px-6 py-3 min-w-[200px]">상세 설명</th>
+                                <th scope="col" class="px-6 py-3 min-w-[150px]">NGS 전략 연계</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr class="bg-white border-b">
+                                <td class="px-6 py-4 font-medium text-gray-900 whitespace-nowrap">인프라 계층 (IaaS)</td>
+                                <td class="px-6 py-4">기존 SAP Private Cloud 인프라를 확장하여 MES 환경을 구축합니다.</td>
+                                <td class="px-6 py-4">인프라 통합 및 하드웨어 표준화</td>
+                            </tr>
+                            <tr class="bg-white border-b">
+                                <td class="px-6 py-4 font-medium text-gray-900 whitespace-nowrap">플랫폼 계층 (PaaS)</td>
+                                <td class="px-6 py-4">MES 운영 환경을 표준화하고 저지연(Low Latency) 성능을 최우선 고려합니다.</td>
+                                <td class="px-6 py-4">운영 효율성 및 원격 통합 관리</td>
+                            </tr>
+                            <tr class="bg-white border-b">
+                                <td class="px-6 py-4 font-medium text-gray-900 whitespace-nowrap">어플리케이션 계층 (MES)</td>
+                                <td class="px-6 py-4">단일 표준 MES 인스턴스를 구축하여 국내외 모든 관계사를 통합하는 Hub & Spoke 모델을 구현합니다.</td>
+                                <td class="px-6 py-4">Hub & Spoke 모델 구현</td>
+                            </tr>
+                            <tr class="bg-white border-b">
+                                <td class="px-6 py-4 font-medium text-gray-900 whitespace-nowrap">연동 계층</td>
+                                <td class="px-6 py-4">SAP와 MES 간의 실시간 인터페이스 표준(API, Web Service 등)을 정의하고 구현합니다.</td>
+                                <td class="px-6 py-4">업무 프로세스 표준화</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="space-y-6">
+                <h4 class="text-xl font-semibold text-blue-600 mb-3">2. MES Private Cloud 도입 핵심 전략</h4>
+                
+                <div class="bg-blue-50 p-4 rounded-lg border-l-4 border-blue-400">
+                    <h5 class="font-bold text-gray-800">2-1. 통합 모델 (Hub & Spoke)을 통한 글로벌 거점 전략 구현</h5>
+                    <ul class="list-disc list-inside text-sm text-gray-600 mt-2 space-y-1">
+                        <li>**중앙 집중식 통합:** 모든 관계사의 생산 실적, 품질 데이터를 중앙 MES에 실시간 수집.</li>
+                        <li>**글로벌 배포 용이성:** 신규 법인에 별도 구축 없이 접속 환경만 빠르게 제공.</li>
+                        <li>**운영 통일성 확보:** 모든 법인이 동일 버전, 로직, UI/UX로 시스템 사용.</li>
+                    </ul>
+                </div>
+                
+                <div class="bg-yellow-50 p-4 rounded-lg border-l-4 border-yellow-400">
+                    <h5 class="font-bold text-gray-800">2-2. 생산 현장(Shop Floor)의 로컬 안정성 확보</h5>
+                    <ul class="list-disc list-inside text-sm text-gray-600 mt-2 space-y-1">
+                        <li>**엣지 컴퓨팅(Edge Computing) 도입:** 각 공장에 경량화된 엣지 서버 배치.</li>
+                        <li>**로컬 캐싱 및 동기화:** 네트워크 단절 시에도 생산 설비 데이터 수집 및 제어, 복구 시 중앙 MES와 자동 동기화.</li>
+                    </ul>
+                </div>
+                
+                <div class="bg-red-50 p-4 rounded-lg border-l-4 border-red-400">
+                    <h5 class="font-bold text-gray-800">2-3. 성능 및 보안 최적화</h5>
+                    <ul class="list-disc list-inside text-sm text-gray-600 mt-2 space-y-1">
+                        <li>**고속 스토리지 할당:** MES DB에 최고 등급 스토리지 전용 할당으로 I/O 성능 보장.</li>
+                        <li>**네트워크 최적화:** 전용 회선 또는 VPN 최적화를 통해 국내외 관계사 간 데이터 전송 지연 최소화.</li>
+                        <li>**논리적 망 분리:** MES와 SAP가 동일 Private Cloud에 있더라도 V-LAN 및 방화벽으로 접근 엄격 통제.</li>
+                    </ul>
+                </div>
+            </div>
+        `;
+        
+        const hubSpokeStrategyContent = `
+            <h3 class="text-2xl font-bold text-gray-800 mb-6 border-b pb-2">Hub & Spoke 인프라 구축 상세 전략</h3>
+            <p class="text-gray-600 mb-6">
+                글로벌 운영 모델을 인프라적으로 뒷받침하기 위한 Hub(본사)와 Spoke(거점/관계사) 간의 IT 인프라 및 네트워크 구축 방안입니다. 핵심은 중앙 집중 관리와 현장 안정성 확보입니다.
+            </p>
+
+            <div class="mb-8">
+                <h4 class="text-xl font-semibold text-blue-600 mb-3">1. Hub(본사)의 인프라 역할 및 요건</h4>
+                <div class="overflow-x-auto rounded-lg border border-gray-200">
+                    <table class="w-full text-sm text-left text-gray-500 table-auto">
+                        <thead class="text-xs text-gray-700 uppercase bg-gray-50">
+                            <tr>
+                                <th scope="col" class="px-6 py-3 min-w-[100px]">영역</th>
+                                <th scope="col" class="px-6 py-3 min-w-[200px]">주요 역할</th>
+                                <th scope="col" class="px-6 py-3 min-w-[150px]">구축 요건</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr class="bg-white border-b">
+                                <td class="px-6 py-4 font-medium text-gray-900 whitespace-nowrap">시스템 호스팅</td>
+                                <td class="px-6 py-4">NGS 핵심 시스템(SAP, MES 등)의 Private Cloud 운영 중심지.</td>
+                                <td class="px-6 py-4">고가용성(HA) 및 재해 복구(DR) 체계 필수.</td>
+                            </tr>
+                            <tr class="bg-white border-b">
+                                <td class="px-6 py-4 font-medium text-gray-900 whitespace-nowrap">데이터 거버넌스</td>
+                                <td class="px-6 py-4">전사 데이터 통합 저장소(Data Lake/Warehouse) 및 BI 시스템 운영.</td>
+                                <td class="px-6 py-4">데이터 표준화 정책 및 보안 통제 기능 강화.</td>
+                            </tr>
+                            <tr class="bg-white">
+                                <td class="px-6 py-4 font-medium text-gray-900 whitespace-nowrap">네트워크</td>
+                                <td class="px-6 py-4">Spoke와의 네트워크 연결(VPN/전용선) 관리 및 대역폭 통제.</td>
+                                <td class="px-6 py-4">고속 및 저지연 글로벌 네트워크 구축.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="space-y-6">
+                <h4 class="text-xl font-semibold text-blue-600 mb-3">2. Spoke(거점/관계사)의 인프라 구축 방안</h4>
+                
+                <div class="bg-blue-50 p-4 rounded-lg border-l-4 border-blue-400">
+                    <h5 class="font-bold text-gray-800">2-1. 네트워크 연결 표준화</h5>
+                    <ul class="list-disc list-inside text-sm text-gray-600 mt-2 space-y-1">
+                        <li>**글로벌 WAN/VPN 표준:** Hub와 Spoke 간의 통신은 암호화된 전용 VPN 또는 SD-WAN을 통해 보안을 강화하고 트래픽을 최적화.</li>
+                        <li>**망 중단 대응:** 네트워크 장애를 대비하여 백업 연결 경로를 확보하고, 서비스 연속성을 위한 Failover 시스템을 구축.</li>
+                    </ul>
+                </div>
+                
+                <div class="bg-yellow-50 p-4 rounded-lg border-l-4 border-yellow-400">
+                    <h5 class="font-bold text-gray-800">2-2. 현장 서비스 안정성 확보 (MES 연계)</h5>
+                    <ul class="list-disc list-inside text-sm text-gray-600 mt-2 space-y-1">
+                        <li>**현장 엣지 서버:** 생산 현장에 MES의 로컬 기능(데이터 수집/제어)을 수행하는 엣지 서버를 배치 (MES 상세 전략과 연계).</li>
+                        <li>**로컬 백업:** 중요 현장 데이터(품질 검사 데이터 등)의 로컬 임시 백업 방안을 수립하여 데이터 손실을 방지.</li>
+                    </ul>
+                </div>
+                
+                <div class="bg-red-50 p-4 rounded-lg border-l-4 border-red-400">
+                    <h5 class="font-bold text-gray-800">2-3. IT 유지보수 표준</h5>
+                    <ul class="list-disc list-inside text-sm text-gray-600 mt-2 space-y-1">
+                        <li>**원격 통합 모니터링:** Hub에서 모든 Spoke의 네트워크, 서버, 시스템 사용량을 24/7 원격 모니터링.</li>
+                        <li>**보안 패치 및 업데이트:** 시스템 패치 및 보안 업데이트는 Hub에서 일괄적으로 테스트 후 Spoke에 배포하여 통일성 유지.</li>
+                    </ul>
+                </div>
+            </div>
+        `;
+
+        document.addEventListener('DOMContentLoaded', () => {
+            
+            const tabs = document.querySelectorAll('.nav-link');
+            const sections = document.querySelectorAll('main > section');
+
+            tabs.forEach(tab => {
+                tab.addEventListener('click', () => {
+                    const tabName = tab.getAttribute('data-tab');
+                    
+                    tabs.forEach(t => {
+                        if (t) {
+                            t.classList.remove('active-tab');
+                            t.classList.remove('font-semibold');
+                        }
+                    });
+                    tab.classList.add('active-tab');
+                    
+                    sections.forEach(section => {
+                        if (section.id === tabName) {
+                            section.classList.remove('hidden');
+                        } else {
+                            section.classList.add('hidden');
+                        }
+                    });
+
+                    // Load chart specifically for the new benefits tab
+                    if (tabName === 'benefits') {
+                        loadBenefitsChart();
+                    }
+                });
+            });
+            
+            const problemCards = document.querySelectorAll('.problem-card');
+            problemCards.forEach(card => {
+                card.addEventListener('click', () => {
+                    const detail = card.querySelector('.problem-detail');
+                    detail.classList.toggle('hidden');
+                });
+            });
+
+            const regionFilter = document.getElementById('regionFilter');
+            const matrixBody = document.getElementById('systemMatrix').querySelector('tbody');
+            const matrixRows = matrixBody.querySelectorAll('tr');
+
+            regionFilter.addEventListener('change', (e) => {
+                const selectedRegion = e.target.value;
+                matrixRows.forEach(row => {
+                    const rowRegion = row.getAttribute('data-region');
+                    if (selectedRegion === 'all' || rowRegion === selectedRegion) {
+                        row.classList.remove('hidden');
+                    } else {
+                        row.classList.add('hidden');
+                    }
+                });
+            });
+            
+            // Initial Chart Load (for Analysis Tab)
+            const ctx = document.getElementById('overseasSystemsChart').getContext('2d');
+            
+            const overseasData = {
+                labels: ['표준 시스템 (Nais, SAP, MES 등)', '현지 자체 시스템 (1C, Tally 등)'],
+                datasets: [{
+                    label: '해외 법인 시스템 인스턴스',
+                    data: [18, 10], 
+                    backgroundColor: [
+                        '#3b82f6',
+                        '#f59e0b',
+                    ],
+                    borderColor: '#ffffff',
+                    borderWidth: 2,
+                }]
+            };
+
+            const overseasChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: overseasData,
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                padding: 20,
+                                font: {
+                                    size: 14,
+                                }
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.label || '';
+                                    if (label) {
+                                        label += ': ';
+                                    }
+                                    if (context.parsed !== null) {
+                                        label += context.parsed;
+                                    }
+                                    return context.parsed + ' 인스턴스';
+                                }
+                            }
+                        }
+                    },
+                    cutout: '60%',
+                }
+            });
+
+            // Benefits Chart Function
+            let benefitsChart = null;
+
+            function loadBenefitsChart() {
+                const benefitsCtx = document.getElementById('benefitsRadarChart');
+
+                if (benefitsChart) {
+                    benefitsChart.destroy();
+                }
+
+                benefitsChart = new Chart(benefitsCtx, {
+                    type: 'radar',
+                    data: {
+                        labels: [
+                            '데이터 신뢰도/통일성', 
+                            '운영 효율성', 
+                            '보안 표준 준수', 
+                            '유지보수 용이성',
+                            '글로벌 확장성'
+                        ],
+                        datasets: [
+                            {
+                                label: 'AS-IS (현행 시스템)',
+                                data: [1.5, 2.0, 2.5, 2.0, 1.0], // 5점 만점 기준 임의 데이터
+                                fill: true,
+                                backgroundColor: 'rgba(245, 158, 11, 0.4)', // Amber 500
+                                borderColor: 'rgb(245, 158, 11)',
+                                pointBackgroundColor: 'rgb(245, 158, 11)',
+                                pointBorderColor: '#fff',
+                                pointHoverBackgroundColor: '#fff',
+                                pointHoverBorderColor: 'rgb(245, 158, 11)'
+                            },
+                            {
+                                label: 'TO-BE (NGS 도입 후)',
+                                data: [4.5, 4.0, 4.8, 4.5, 5.0], // 5점 만점 기준 임의 데이터
+                                fill: true,
+                                backgroundColor: 'rgba(59, 130, 246, 0.4)', // Blue 500
+                                borderColor: 'rgb(59, 130, 246)',
+                                pointBackgroundColor: 'rgb(59, 130, 246)',
+                                pointBorderColor: '#fff',
+                                pointHoverBackgroundColor: '#fff',
+                                pointHoverBorderColor: 'rgb(59, 130, 246)'
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        elements: {
+                            line: {
+                                borderWidth: 3
+                            }
+                        },
+                        scales: {
+                            r: {
+                                angleLines: {
+                                    display: true
+                                },
+                                suggestedMin: 0,
+                                suggestedMax: 5,
+                                ticks: {
+                                    stepSize: 1,
+                                    backdropColor: 'rgba(255, 255, 255, 0.8)'
+                                },
+                                pointLabels: {
+                                    font: {
+                                        size: 14
+                                    }
+                                }
+                            }
+                        },
+                        plugins: {
+                            legend: {
+                                position: 'top',
+                            }
+                        }
+                    }
+                });
+            }
+
+            // MES Modal Logic
+            const mesModal = document.getElementById('mesModal');
+            const openMesModalButton = document.getElementById('openMesModal');
+            const closeMesModalButton = document.getElementById('closeMesModal');
+            const mesModalContentDiv = document.getElementById('mesModalContent');
+
+            mesModalContentDiv.innerHTML = mesStrategyContent;
+
+            openMesModalButton.addEventListener('click', () => {
+                mesModal.classList.remove('hidden');
+            });
+
+            closeMesModalButton.addEventListener('click', () => {
+                mesModal.classList.add('hidden');
+            });
+
+            mesModal.addEventListener('click', (e) => {
+                if (e.target === mesModal) {
+                    mesModal.classList.add('hidden');
+                }
+            });
+
+            // Hub & Spoke Modal Logic
+            const hubSpokeModal = document.getElementById('hubSpokeModal');
+            const openHubSpokeModalButton = document.getElementById('openHubSpokeModal');
+            const closeHubSpokeModalButton = document.getElementById('closeHubSpokeModal');
+            const hubSpokeModalContentDiv = document.getElementById('hubSpokeModalContent');
+
+            hubSpokeModalContentDiv.innerHTML = hubSpokeStrategyContent;
+
+            openHubSpokeModalButton.addEventListener('click', () => {
+                hubSpokeModal.classList.remove('hidden');
+            });
+
+            closeHubSpokeModalButton.addEventListener('click', () => {
+                hubSpokeModal.classList.add('hidden');
+            });
+
+            hubSpokeModal.addEventListener('click', (e) => {
+                if (e.target === hubSpokeModal) {
+                    hubSpokeModal.classList.add('hidden');
+                }
+            });
+
+        });
+    </script>
+
+</body>
+</html>
